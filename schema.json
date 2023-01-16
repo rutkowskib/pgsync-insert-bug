@@ -1,0 +1,23 @@
+[{
+  "database": "{{database}}",
+  "index": "rooms",
+  "nodes": {
+    "schema": "public",
+    "table": "room",
+    "columns": [
+      "id",
+      "name"
+    ],
+    "children": [{
+      "table": "room_users",
+      "columns": [
+          "user_id",
+          "room_id"
+      ],
+      "relationship": {
+        "variant": "object",
+        "type": "one_to_many"
+      }
+    }]
+  }
+}]

@@ -1,0 +1,106 @@
+version: '3.7'
+services:
+  postgres:
+    image: postgres:14.5
+    restart: always
+    build:
+      context: .
+      dockerfile: pg.Dockerfile
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=db_user
+    volumes:
+      - postgres_data_14:/var/lib/postgresql/data
+    command: [ "postgres", "-c", "wal_level=logical" ]
+    ports:
+      - "5432:5432"
+    networks:
+      - pgsync-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    links:
+      - postgres
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: pwdpwd
+    volumes:
+      - pgadmin:/root/.pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - pgsync-network
+
+  elasticvue:
+    image: cars10/elasticvue:latest
+    ports:
+      - "7000:8080"
+    networks:
+      - pgsync-network
+
+  pgsync:
+    build: .
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: db_user
+      PG_PASSWORD: password
+      PG_DATABASE: postgres
+      ELASTICSEARCH_HOST: opensearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_USER: admin
+      ELASTICSEARCH_PASSWORD: admin
+      ELASTICSEARCH_VERIFY_CERTS: False
+      ELASTICSEARCH_SCHEME: https
+      REDIS_HOST: redis
+      CHECKPOINT_PATH: /usr/local
+    networks:
+      - pgsync-network
+    links:
+      - opensearch
+    ports:
+      - "6060:8080"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    restart: always
+
+  redis:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - cache:/data
+    networks:
+      - pgsync-network
+
+  opensearch:
+    image: opensearchproject/opensearch:2.3.0
+    environment:
+      discovery.type: single-node
+      http.cors.enabled: true
+      http.cors.allow-origin: http://localhost:7000
+      http.cors.allow-headers: X-Requested-With,Content-Type,Content-Length,Authorization
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    healthcheck:
+      test: [ "CMD", "curl", "-k", "-X", "GET", "--user", "admin:admin" ,"https://localhost:9200/_cluster/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - pgsync-network
+
+volumes:
+  postgres_data_14:
+  pgadmin:
+  cache:
+    driver: local
+
+networks:
+  pgsync-network:
